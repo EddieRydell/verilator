@@ -701,7 +701,8 @@ class TristateVisitor final : public TristateBaseVisitor {
         AstNodeExpr* enRhsp = nullptr;
         const auto enIt = m_assignEnps.find(m_assignp);
         // Struct and union resolver expressions require member-wise lowering. Keep their
-        // established per-assignment path until procedural coalescing provides that representation.
+        // established per-assignment path until procedural coalescing provides that
+        // representation.
         const bool canCombineProcedural = !VN_IS(key->dtypep()->skipRefp(), NodeUOrStructDType);
         const AstNodeProcedure* const procedurep
             = enIt != m_assignEnps.end() && canCombineProcedural ? m_procedurep : nullptr;
