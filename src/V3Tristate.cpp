@@ -682,6 +682,10 @@ class TristateVisitor final : public TristateBaseVisitor {
         }
 
         AstNodeExpr* const newLhsp = lhsp->cloneTreePure(false);
+        // user1p carries pass-local enable ownership, not semantic AST state. Sharing those
+        // pointers with the projected LHS would leave the clone referring to enable nodes owned
+        // by the original assignment.
+        newLhsp->foreach([](AstNode* nodep) { nodep->user1p(nullptr); });
         AstNodeVarRef* const newVarrefp = targetp->clonep();
         UASSERT_OBJ(newVarrefp, targetp, "Procedural tristate LHS clone lost variable reference");
         return LhsProjection{newLhsp, newVarrefp, enp};
@@ -927,21 +931,15 @@ class TristateVisitor final : public TristateBaseVisitor {
             for (RefStrength* const refStrengthp : driver.m_refsp) {
                 AstNodeVarRef* refp = refStrengthp->m_varrefp;
 
-                if (driver.m_procedurep && refp->user1p()) {
-                    AstNode* const oldEnp = refp->user1p();
-                    refp->user1p(nullptr);
-                    VL_DO_DANGLING(oldEnp->deleteTree(), oldEnp);
-                }
-
                 // When retargeting a VarXRef to a local __out var, the dotted path becomes
                 // inconsistent. Replace the VarXRef with a local VarRef.
                 if (VN_IS(refp, VarXRef)) {
                     AstVarRef* const localRefp
                         = new AstVarRef{refp->fileline(), newLhsp, VAccess::WRITE};
-                    if (!driver.m_procedurep) {
-                        localRefp->user1p(refp->user1p());
-                        refp->user1p(nullptr);
-                    }
+                    // Preserve ownership of any detached enable tree for the existing end-of-pass
+                    // cleanup, regardless of whether this is a procedural driver.
+                    localRefp->user1p(refp->user1p());
+                    refp->user1p(nullptr);
                     refp->replaceWith(localRefp);
                     VL_DO_DANGLING(pushDeletep(refp), refp);
                     refp = localRefp;
