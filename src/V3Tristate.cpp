@@ -662,25 +662,8 @@ class TristateVisitor final : public TristateBaseVisitor {
     }
 
     LhsProjection newLhsProjection(AstNodeExpr* lhsp, AstNodeVarRef* targetp, AstNodeExpr* enp) {
-        // Concat operands receive corresponding slices of the assignment enable. Once the target
-        // is below any other LHS expression (for example a select), clone that expression exactly
-        // so the data and enable assignments update the same bits.
-        if (AstConcat* const concatp = VN_CAST(lhsp, Concat)) {
-            if (concatp->lhsp()->exists(
-                    [targetp](const AstNodeVarRef* refp) { return refp == targetp; })) {
-                return newLhsProjection(concatp->lhsp(), targetp,
-                                        new AstSel{concatp->fileline(), enp,
-                                                   concatp->rhsp()->width(),
-                                                   concatp->lhsp()->width()});
-            }
-            UASSERT_OBJ(concatp->rhsp()->exists(
-                            [targetp](const AstNodeVarRef* refp) { return refp == targetp; }),
-                        targetp, "Procedural tristate reference not under assignment LHS");
-            return newLhsProjection(
-                concatp->rhsp(), targetp,
-                new AstSel{concatp->fileline(), enp, 0, concatp->rhsp()->width()});
-        }
-
+        // LHS concatenations are split before V3Tristate. Clone the remaining LHS expression so
+        // the data and enable assignments update the same footprint.
         AstNodeExpr* const newLhsp = lhsp->cloneTreePure(false);
         // user1p carries pass-local enable ownership, not semantic AST state. Sharing those
         // pointers with the projected LHS would leave the clone referring to enable nodes owned
@@ -907,7 +890,7 @@ class TristateVisitor final : public TristateBaseVisitor {
                     drivers[emplaced.first->second].m_refsp.push_back(&*it);
                     continue;
                 }
-            }
+            }  // LCOV_EXCL_LINE -- GCC exception cleanup branch
             drivers.push_back(DriverGroup{it->m_procedurep, {&*it}});
         }
 
@@ -1771,7 +1754,9 @@ class TristateVisitor final : public TristateBaseVisitor {
             iterateAndNextNull(nodep->rhsp());
             UINFO(9, dbgState() << nodep);
             UINFOTREE(9, nodep, "", "assign");
-            if (m_procedurep && !VN_IS(nodep, AssignW)) {
+            if (m_procedurep) {
+                UASSERT_OBJ(!VN_IS(nodep, AssignW), nodep,
+                            "Continuous assignment inside procedural process");
                 AstNodeExpr* const enp
                     = nodep->rhsp()->user1p()
                           ? VN_AS(nodep->rhsp()->user1p(), NodeExpr)->cloneTreePure(false)

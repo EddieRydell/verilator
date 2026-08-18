@@ -9,6 +9,11 @@
 `define checkh(gotv, expv) do if ((gotv) !== (expv)) begin $write("%%Error: %s:%0d:  got=%0x exp=%0x (%s !== %s)\n", `__FILE__, `__LINE__, (gotv), (expv), `"gotv`", `"expv`"); `stop; end while(0);
 // verilog_format: on
 
+interface tri_proc_if;
+  logic [6:0] whole_result;
+  logic [3:0] partial_result;
+endinterface
+
 module t (
     input clk
 );
@@ -25,6 +30,7 @@ module t (
   logic [3:0] partial_result;
   logic [3:0] concat_result;
   logic [3:0] indexed_result;
+  tri_proc_if proc_if ();
   // verilator lint_off MULTIDRIVEN
   logic [6:0] multi_result;
   // verilator lint_on MULTIDRIVEN
@@ -66,6 +72,16 @@ module t (
     if (enable_lo) indexed_result[index] = 1'b1;
   end
 
+  always_comb begin
+    proc_if.whole_result = 'z;
+    if (enable_a) proc_if.whole_result = 7'h21;
+  end
+
+  always_comb begin
+    proc_if.partial_result = 'z;
+    if (enable_lo) proc_if.partial_result[2:1] = 2'b10;
+  end
+
   always @(posedge clk) begin
     cyc <= cyc + 1;
     if (cyc == 0) begin
@@ -80,6 +96,8 @@ module t (
       `checkh(partial_result, 4'b1001);
       `checkh(concat_result, 4'b1zz0);
       `checkh(indexed_result, 4'bzzz1);
+      `checkh(proc_if.whole_result, 7'h21);
+      `checkh(proc_if.partial_result, 4'bz10z);
       select <= 6'h2b;
       enable_a <= 1'b0;
       enable_b <= 1'b1;
@@ -92,6 +110,8 @@ module t (
       `checkh(partial_result, 4'b1000);
       `checkh(concat_result, 4'b1zz0);
       `checkh(indexed_result, 4'bz1zz);
+      `checkh(proc_if.whole_result, 7'hzz);
+      `checkh(proc_if.partial_result, 4'bz10z);
       select <= 6'h2c;
       enable_b <= 1'b0;
       enable_hi <= 1'b0;
@@ -103,6 +123,8 @@ module t (
       `checkh(partial_result, 4'bzz01);
       `checkh(concat_result, 4'b1zz0);
       `checkh(indexed_result, 4'bz1zz);
+      `checkh(proc_if.whole_result, 7'hzz);
+      `checkh(proc_if.partial_result, 4'bz10z);
       select <= 6'h00;
       enable_lo <= 1'b0;
     end
@@ -111,6 +133,8 @@ module t (
       `checkh(partial_result, 4'bzzzz);
       `checkh(concat_result, 4'bzzzz);
       `checkh(indexed_result, 4'bzzzz);
+      `checkh(proc_if.whole_result, 7'hzz);
+      `checkh(proc_if.partial_result, 4'bzzzz);
       $write("*-* All Finished *-*\n");
       $finish;
     end
